@@ -2,25 +2,44 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>足の特徴診断アプリ（ベータ）</title>
+  <title>足の特徴診断アプリ（スマホ対応ベータ）</title>
+  <!-- スマホでの表示を最適化 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1>足の特徴診断アプリ（ベータ）</h1>
+    <h1>足の特徴診断アプリ</h1>
+    <p class="subtitle">
+      スマホで足を撮って、簡単に特徴チェックできます📱🦶
+    </p>
 
+    <!-- 1. 写真を撮る or ギャラリーから選ぶ -->
     <section class="panel">
-      <h2>1. 足の写真をアップロード</h2>
-      <p>
-        立った状態で足を上から撮った写真を選んでください。<br>
-        （できれば床が単色で、足全体が写っているもの）
+      <h2>1. 足の写真を撮る / 選ぶ</h2>
+      <p class="text">
+        立っている状態で、足を上から撮影してください。<br>
+        床はできるだけシンプルな色だと見やすいです。
       </p>
-      <input type="file" id="imageInput" accept="image/*">
+
+      <!-- スマホでカメラを開きやすくする -->
+      <label for="imageInput" class="file-label">
+        カメラで撮る / 写真を選ぶ
+      </label>
+      <input
+        type="file"
+        id="imageInput"
+        accept="image/*"
+        capture="environment"  <!-- 背面カメラを優先的に使う -->
+      >
+      <p class="hint">※ iPhone / Android の標準ブラウザで使えます。</p>
     </section>
 
+    <!-- 2. 画像の上でタップしてポイント指定 -->
     <section class="panel">
-      <h2>2. 写真の上をクリックしてポイントを指定</h2>
-      <ol>
+      <h2>2. 画像の上を順番にタップ</h2>
+      <ol class="steps">
         <li>かかと</li>
         <li>親指の先</li>
         <li>人差し指の先</li>
@@ -28,28 +47,33 @@
         <li>足幅の左端（いちばん広いところ）</li>
         <li>足幅の右端（いちばん広いところ）</li>
       </ol>
+
       <p id="instruction" class="instruction">
-        まずは画像をアップロードしてください。
+        まずは写真を撮る / 選ぶ から始めてください。
       </p>
+
       <div class="canvas-wrapper">
+        <!-- 横幅はCSSで画面に合わせる -->
         <canvas id="footCanvas"></canvas>
       </div>
     </section>
 
+    <!-- 3. 診断結果 -->
     <section class="panel">
       <h2>3. 診断結果</h2>
       <div id="result">
         まだ診断は行われていません。<br>
-        すべてのポイント（6か所）をクリックすると結果が表示されます。
+        すべてのポイント（6か所）をタップすると結果が表示されます。
       </div>
     </section>
 
+    <!-- メモ・注意書き -->
     <section class="panel note">
-      <h2>注意・今後の拡張イメージ</h2>
+      <h2>注意・このアプリについて</h2>
       <ul>
-        <li>今は「写真＋手動クリック」で簡易的に特徴を推定しています。</li>
-        <li>幅／長さの比率と、指の長さの違いから「幅広／ふつう／細め」「エジプト型／ギリシャ型／スクエア型」を判定します。</li>
-        <li>将来的には輪郭抽出・深度推定・機械学習モデルを組み合わせて自動判定にすることもできます。</li>
+        <li>スマホの画面上で簡単に足の特徴を確認するための、ベータ版アプリです。</li>
+        <li>足幅／長さの比率と指の長さの差から、ざっくりとしたタイプを判定します。</li>
+        <li>正確なサイズ決定には、実際の試し履きも必ず合わせて確認してください。</li>
       </ul>
     </section>
   </div>
@@ -57,3 +81,4 @@
   <script src="script.js"></script>
 </body>
 </html>
+
