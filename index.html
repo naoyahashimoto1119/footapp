@@ -2,83 +2,58 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>足の特徴診断アプリ（スマホ対応ベータ）</title>
-  <!-- スマホでの表示を最適化 -->
+  <title>足の特徴診断アプリ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1>足の特徴診断アプリ</h1>
-    <p class="subtitle">
-      スマホで足を撮って、簡単に特徴チェックできます📱🦶
-    </p>
+    <header class="header">
+      <h1>🦶 足の特徴診断</h1>
+      <p class="subtitle">写真を撮るだけでAIが自動分析</p>
+    </header>
 
-    <!-- 1. 写真を撮る or ギャラリーから選ぶ -->
+    <!-- 写真を撮る -->
     <section class="panel">
-      <h2>1. 足の写真を撮る / 選ぶ</h2>
-      <p class="text">
-        立っている状態で、足を上から撮影してください。<br>
-        床はできるだけシンプルな色だと見やすいです。
-      </p>
-
-      <!-- スマホでカメラを開きやすくする -->
-      <label for="imageInput" class="file-label">
-        カメラで撮る / 写真を選ぶ
+      <h2>足の写真を撮る</h2>
+      <p class="text">立った状態で足を上から撮影してください</p>
+      
+      <label for="imageInput" class="upload-button">
+        📷 カメラで撮る / 写真を選ぶ
       </label>
       <input
         type="file"
         id="imageInput"
         accept="image/*"
-        capture="environment"  <!-- 背面カメラを優先的に使う -->
+        capture="environment"
       >
-      <p class="hint">※ iPhone / Android の標準ブラウザで使えます。</p>
     </section>
 
-    <!-- 2. 画像の上でタップしてポイント指定 -->
-    <section class="panel">
-      <h2>2. 画像の上を順番にタップ</h2>
-      <ol class="steps">
-        <li>かかと</li>
-        <li>親指の先</li>
-        <li>人差し指の先</li>
-        <li>小指の先</li>
-        <li>足幅の左端（いちばん広いところ）</li>
-        <li>足幅の右端（いちばん広いところ）</li>
-      </ol>
-
-      <p id="instruction" class="instruction">
-        まずは写真を撮る / 選ぶ から始めてください。
-      </p>
-
+    <!-- 分析中・結果表示エリア -->
+    <section class="panel" id="resultSection" style="display: none;">
       <div class="canvas-wrapper">
-        <!-- 横幅はCSSで画面に合わせる -->
         <canvas id="footCanvas"></canvas>
       </div>
-    </section>
-
-    <!-- 3. 診断結果 -->
-    <section class="panel">
-      <h2>3. 診断結果</h2>
-      <div id="result">
-        まだ診断は行われていません。<br>
-        すべてのポイント（6か所）をタップすると結果が表示されます。
+      
+      <div class="analyzing" id="analyzing">
+        <div class="spinner"></div>
+        <p>AIが足を分析中...</p>
       </div>
+
+      <div class="error" id="errorMessage" style="display: none;"></div>
+
+      <div id="result"></div>
+      
+      <button class="retry-button" id="retryBtn" style="display: none;">
+        📷 別の写真で試す
+      </button>
     </section>
 
-    <!-- メモ・注意書き -->
-    <section class="panel note">
-      <h2>注意・このアプリについて</h2>
-      <ul>
-        <li>スマホの画面上で簡単に足の特徴を確認するための、ベータ版アプリです。</li>
-        <li>足幅／長さの比率と指の長さの差から、ざっくりとしたタイプを判定します。</li>
-        <li>正確なサイズ決定には、実際の試し履きも必ず合わせて確認してください。</li>
-      </ul>
-    </section>
+    <footer class="footer">
+      <p>🏃 足に合ったシューズで快適なスポーツライフを！</p>
+    </footer>
   </div>
 
   <script src="script.js"></script>
 </body>
 </html>
-

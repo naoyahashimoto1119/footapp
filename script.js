@@ -1,59 +1,66 @@
 // ====== グローバル変数 ======
-
-// キャンバス関連
 let canvas, ctx;
 let img = new Image();
-let imgLoaded = false;
 
-// クリックで指定するポイント（順番）
+// ポイント定義
 const POINT_LABELS = [
-  "かかと",
-  "親指の先",
-  "人差し指の先",
-  "小指の先",
-  "足幅 左端",
-  "足幅 右端"
+  { key: 'heel', label: 'かかと', color: '#FF6B6B' },
+  { key: 'bigToe', label: '親指の先', color: '#4ECDC4' },
+  { key: 'secondToe', label: '人差し指の先', color: '#45B7D1' },
+  { key: 'littleToe', label: '小指の先', color: '#96CEB4' },
+  { key: 'widthLeft', label: '足幅 左端', color: '#FFEAA7' },
+  { key: 'widthRight', label: '足幅 右端', color: '#DDA0DD' },
 ];
 
-let points = []; // {x, y, label}
+let points = [];
 
 // ====== 起動時処理 ======
-window.addEventListener("DOMContentLoaded", () => {
-  canvas = document.getElementById("footCanvas");
-  ctx = canvas.getContext("2d");
+window.addEventListener('DOMContentLoaded', () => {
+  canvas = document.getElementById('footCanvas');
+  ctx = canvas.getContext('2d');
 
-  const imageInput = document.getElementById("imageInput");
-  imageInput.addEventListener("change", handleImageUpload);
-
-  // スマホのタップも click イベントとして飛んでくるのでこれでOK
-  canvas.addEventListener("click", handleCanvasClick);
-
-  updateInstruction("まずは写真を撮る / 選ぶ から始めてください。");
+  document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+  document.getElementById('retryBtn').addEventListener('click', () => {
+    document.getElementById('imageInput').click();
+  });
 });
 
-// ====== 画像アップロード処理 ======
+// ====== 画像アップロード → 自動分析 ======
 function handleImageUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const imageBase64 = dataUrl.split(',')[1];
+    
     img.onload = () => {
-      imgLoaded = true;
-      points = []; // リセット
+      // UI表示
+      document.getElementById('resultSection').style.display = 'block';
+      document.getElementById('analyzing').style.display = 'flex';
+      document.getElementById('result').innerHTML = '';
+      document.getElementById('retryBtn').style.display = 'none';
+      document.getElementById('errorMessage').style.display = 'none';
+      
+      // キャンバス描画
       resizeCanvasToImage();
       drawImage();
-      updateInstruction(`画像を読み込みました。「${POINT_LABELS[0]}」の位置をタップしてください。`);
-      updateResultInitial();
+      
+      // 自動でAI分析開始
+      analyzeWithAI(imageBase64);
     };
-    img.src = e.target.result;
+    img.src = dataUrl;
   };
   reader.readAsDataURL(file);
+  
+  // 同じファイルを再選択できるようにリセット
+  event.target.value = '';
 }
 
-// キャンバスサイズを画像サイズに合わせる（横幅は画面にフィット）
+// キャンバスサイズを画像に合わせる
 function resizeCanvasToImage() {
-  const maxWidth = 800;          // PCで見たときの上限
+  const maxWidth = 600;
   const containerWidth = canvas.parentElement.clientWidth;
   const baseWidth = Math.min(img.width, maxWidth, containerWidth);
 
@@ -62,198 +69,229 @@ function resizeCanvasToImage() {
   canvas.height = img.height * scale;
 }
 
-// 画像をキャンバスに描画
+// 画像とポイントを描画
 function drawImage() {
-  if (!imgLoaded) return;
-
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  // すでに指定済みのポイントがあれば再描画
+  // ポイント描画
   points.forEach((p, index) => {
-    drawPoint(p.x, p.y, p.label, index + 1);
+    const info = POINT_LABELS[index];
+    drawPoint(p.x, p.y, info.color, index + 1, info.label);
   });
 }
 
-// ====== キャンバスクリック処理 ======
-function handleCanvasClick(event) {
-  if (!imgLoaded) return;
-  if (points.length >= POINT_LABELS.length) {
-    return;
-  }
-
-  const rect = canvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-
-  const label = POINT_LABELS[points.length];
-  points.push({ x, y, label });
-
-  drawImage(); // 画像＋既存ポイント再描画
-  drawPoint(x, y, label, points.length);
-
-  if (points.length < POINT_LABELS.length) {
-    const nextLabel = POINT_LABELS[points.length];
-    updateInstruction(`「${label}」を記録しました。次は「${nextLabel}」の位置をタップしてください。`);
-  } else {
-    updateInstruction("すべてのポイントを指定しました。診断結果を計算しています…");
-    analyzeFoot();
-  }
-}
-
-// ポイントを描画（小さな丸＋番号＋ラベル）
-function drawPoint(x, y, label, index) {
-  const radius = 5;
-
-  // 丸
+// ポイントを描画
+function drawPoint(x, y, color, index, label) {
+  // 円
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fillStyle = "#ff5722";
+  ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = color;
   ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
   ctx.closePath();
 
-  // 番号とラベル
-  ctx.font = "12px sans-serif";
-  ctx.fillStyle = "#000000";
-  ctx.fillText(index.toString(), x + 8, y - 4);
-  ctx.fillText(label, x + 8, y + 10);
+  // 番号
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(index.toString(), x, y);
+
+  // ラベル
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#333';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(label, x + 14, y - 6);
+}
+
+// ====== AI自動分析 ======
+async function analyzeWithAI(imageBase64) {
+  const errorDiv = document.getElementById('errorMessage');
+  
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/jpeg',
+                data: imageBase64
+              }
+            },
+            {
+              type: 'text',
+              text: `この足の画像を分析してください。以下の6つのポイントの位置を、画像の左上を(0,0)、右下を(100,100)としたパーセンテージ座標で推定してください。
+
+1. heel (かかとの中心点)
+2. bigToe (親指の先端)
+3. secondToe (人差し指の先端)
+4. littleToe (小指の先端)
+5. widthLeft (足幅が最も広い部分の左端)
+6. widthRight (足幅が最も広い部分の右端)
+
+必ず以下のJSON形式のみで回答してください。他のテキストは含めないでください：
+{"heel":{"x":数値,"y":数値},"bigToe":{"x":数値,"y":数値},"secondToe":{"x":数値,"y":数値},"littleToe":{"x":数値,"y":数値},"widthLeft":{"x":数値,"y":数値},"widthRight":{"x":数値,"y":数値}}`
+            }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error.message || 'API エラーが発生しました');
+    }
+    
+    const text = data.content?.[0]?.text || '';
+    
+    // JSONを抽出
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('AIからの応答を解析できませんでした');
+    }
+
+    const detected = JSON.parse(jsonMatch[0]);
+    
+    // パーセンテージをピクセル座標に変換
+    points = POINT_LABELS.map(({ key }) => ({
+      x: (detected[key].x / 100) * canvas.width,
+      y: (detected[key].y / 100) * canvas.height,
+      key,
+    }));
+
+    drawImage();
+    document.getElementById('analyzing').style.display = 'none';
+    document.getElementById('retryBtn').style.display = 'block';
+    calculateResult();
+    
+  } catch (err) {
+    console.error(err);
+    document.getElementById('analyzing').style.display = 'none';
+    errorDiv.textContent = 'AI分析に失敗しました。別の写真で試してください。';
+    errorDiv.style.display = 'block';
+    document.getElementById('retryBtn').style.display = 'block';
+  }
 }
 
 // ====== 診断ロジック ======
-function analyzeFoot() {
+function calculateResult() {
   if (points.length < POINT_LABELS.length) return;
 
-  const heel = points[0];
-  const bigToe = points[1];
-  const secondToe = points[2];
-  const littleToe = points[3];
-  const widthLeft = points[4];
-  const widthRight = points[5];
+  const getPoint = (key) => points.find(p => p.key === key);
+  const heel = getPoint('heel');
+  const bigToe = getPoint('bigToe');
+  const secondToe = getPoint('secondToe');
+  const littleToe = getPoint('littleToe');
+  const widthLeft = getPoint('widthLeft');
+  const widthRight = getPoint('widthRight');
+
+  const distance = (p1, p2) => Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
 
   const dHeelBig = distance(heel, bigToe);
   const dHeelSecond = distance(heel, secondToe);
   const dHeelLittle = distance(heel, littleToe);
   const width = distance(widthLeft, widthRight);
-
   const widthRatio = width / dHeelBig;
 
-  let widthType = "ふつう";
-  let widthTagClass = "tag-normal";
+  // 足幅タイプ判定
+  let widthType, widthClass;
   if (widthRatio < 0.36) {
-    widthType = "細め";
-    widthTagClass = "tag-narrow";
+    widthType = '細め';
+    widthClass = 'narrow';
   } else if (widthRatio > 0.40) {
-    widthType = "幅広";
-    widthTagClass = "tag-wide";
+    widthType = '幅広';
+    widthClass = 'wide';
+  } else {
+    widthType = 'ふつう';
+    widthClass = 'normal';
   }
 
+  // つま先タイプ判定
   const diff = dHeelBig - dHeelSecond;
-  const toeThreshold = 5;
-  let toeType = "スクエア型（ほぼ同じ長さ）";
-  let toeTagClass = "tag-square";
-
-  if (diff > toeThreshold) {
-    toeType = "エジプト型（親指が一番長い）";
-    toeTagClass = "tag-egypt";
-  } else if (diff < -toeThreshold) {
-    toeType = "ギリシャ型（人差し指が一番長い）";
-    toeTagClass = "tag-greek";
-  }
-
-  let widthComment = "";
-  if (widthType === "細め") {
-    widthComment = "足幅が比較的細めなので、細身のスパイクや、甲が高くないモデルの方がフィットしやすいかもしれません。";
-  } else if (widthType === "ふつう") {
-    widthComment = "足幅は標準的なバランスで、多くのメーカーのレギュラーフィットに合いやすいタイプです。";
+  let toeType, toeClass;
+  if (diff > 5) {
+    toeType = 'エジプト型';
+    toeClass = 'egypt';
+  } else if (diff < -5) {
+    toeType = 'ギリシャ型';
+    toeClass = 'greek';
   } else {
-    widthComment = "幅広タイプなので、ワイドモデルや、足幅にゆとりのあるスパイクを選ぶと楽だと思います。";
+    toeType = 'スクエア型';
+    toeClass = 'square';
   }
 
-  let toeComment = "";
-  if (toeType.startsWith("エジプト型")) {
-    toeComment = "親指側が長いので、つま先側に少し余裕があるモデルを選ばないと親指だけ当たりやすくなります。";
-  } else if (toeType.startsWith("ギリシャ型")) {
-    toeComment = "人差し指が長めなので、つま先全体に均等に余裕がある形のスパイクが合いやすいです。";
-  } else {
-    toeComment = "指の長さがそろっていて、つま先の形が四角っぽいタイプです。トウボックスが広めのモデルと相性が良いです。";
-  }
+  // コメント
+  const widthComments = {
+    narrow: '細身のスパイクや甲が高くないモデルがフィットしやすいです',
+    normal: '多くのメーカーのレギュラーフィットに合いやすいタイプです',
+    wide: 'ワイドモデルや足幅にゆとりのあるスパイクがおすすめです',
+  };
 
-  const resultDiv = document.getElementById("result");
+  const toeComments = {
+    egypt: '親指側が長いので、つま先に余裕があるモデルを選びましょう',
+    greek: '人差し指が長めなので、つま先全体に均等な余裕がある形が◎',
+    square: '指の長さが揃っているので、トウボックスが広めのモデルと相性良し',
+  };
+
+  // 結果表示
+  const resultDiv = document.getElementById('result');
   resultDiv.innerHTML = `
-    <p><strong>診断まとめ（簡易）</strong></p>
-    <table class="result-table">
-      <tr>
-        <th>項目</th>
-        <th>値（ピクセル）</th>
-        <th>説明</th>
-      </tr>
-      <tr>
-        <td>かかと〜親指の長さ</td>
-        <td>${dHeelBig.toFixed(1)} px</td>
-        <td>足の「長さ」の基準として使用</td>
-      </tr>
-      <tr>
-        <td>かかと〜人差し指の長さ</td>
-        <td>${dHeelSecond.toFixed(1)} px</td>
-        <td>指の形（エジプト／ギリシャ）の判定に使用</td>
-      </tr>
-      <tr>
-        <td>かかと〜小指の長さ</td>
-        <td>${dHeelLittle.toFixed(1)} px</td>
-        <td>左右バランスのざっくりチェック用</td>
-      </tr>
-      <tr>
-        <td>足幅（いちばん広い部分）</td>
-        <td>${width.toFixed(1)} px</td>
-        <td>幅広・細めの判定に使用</td>
-      </tr>
-      <tr>
-        <td>幅／長さの比率</td>
-        <td>${widthRatio.toFixed(3)}</td>
-        <td>0.36未満：細め／0.36〜0.40：ふつう／0.40超：幅広（目安）</td>
-      </tr>
-    </table>
+    <div class="result-card">
+      <div class="result-item">
+        <span class="result-label">足幅タイプ</span>
+        <span class="result-tag tag-${widthClass}">${widthType}</span>
+      </div>
+      <p class="comment">${widthComments[widthClass]}</p>
+    </div>
 
-    <p>
-      <strong>足幅タイプ：</strong>
-      ${widthType}
-      <span class="result-tag ${widthTagClass}">${widthType}</span>
+    <div class="result-card">
+      <div class="result-item">
+        <span class="result-label">つま先の形</span>
+        <span class="result-tag tag-${toeClass}">${toeType}</span>
+      </div>
+      <p class="comment">${toeComments[toeClass]}</p>
+    </div>
+
+    <div class="data-table">
+      <h3 class="data-title">計測データ</h3>
+      <div class="data-row">
+        <span>幅／長さ比率</span>
+        <span class="data-value">${widthRatio.toFixed(3)}</span>
+      </div>
+      <div class="data-row">
+        <span>かかと〜親指</span>
+        <span class="data-value">${dHeelBig.toFixed(1)} px</span>
+      </div>
+      <div class="data-row">
+        <span>かかと〜人差し指</span>
+        <span class="data-value">${dHeelSecond.toFixed(1)} px</span>
+      </div>
+      <div class="data-row">
+        <span>かかと〜小指</span>
+        <span class="data-value">${dHeelLittle.toFixed(1)} px</span>
+      </div>
+      <div class="data-row">
+        <span>足幅</span>
+        <span class="data-value">${width.toFixed(1)} px</span>
+      </div>
+    </div>
+
+    <p class="disclaimer">
+      ※ この診断は写真に基づく簡易的な推定です。<br>
+      実際のサイズ選びでは試し履きも合わせてご確認ください。
     </p>
-    <p>${widthComment}</p>
-
-    <p>
-      <strong>つま先の形：</strong>
-      ${toeType}
-      <span class="result-tag ${toeTagClass}">${toeType}</span>
-    </p>
-    <p>${toeComment}</p>
-
-    <p style="font-size:0.8rem;color:#555;">
-      ※ この診断はあくまで写真とタップ位置に基づく簡易的な推定です。<br>
-      実際のサイズ選びでは、メーカーごとのワイズ表示や試し履きも合わせて確認してください。
-    </p>
-  `;
-
-  updateInstruction("診断が完了しました。別の写真で試したい場合は、もう一度写真を撮る / 選ぶ を押してください。");
-}
-
-// 2点間の距離
-function distance(p1, p2) {
-  const dx = p1.x - p2.x;
-  const dy = p1.y - p2.y;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-// ====== UI 更新系 ======
-function updateInstruction(text) {
-  const inst = document.getElementById("instruction");
-  inst.textContent = text;
-}
-
-function updateResultInitial() {
-  const resultDiv = document.getElementById("result");
-  resultDiv.innerHTML = `
-    画像を読み込みました。<br>
-    指示に従って 6 か所のポイントをタップすると診断結果が表示されます。
   `;
 }
