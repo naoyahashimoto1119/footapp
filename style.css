@@ -1,54 +1,109 @@
+/* 全体 */
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
   background-color: #f5f5f5;
+  color: #222;
 }
 
 .container {
   max-width: 900px;
-  margin: 20px auto;
-  padding: 0 16px 40px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
 }
 
 h1 {
   text-align: center;
-  margin-bottom: 16px;
+  margin: 12px 0 4px;
+  font-size: 1.4rem;
+}
+
+.subtitle {
+  text-align: center;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: #555;
 }
 
 .panel {
   background-color: #ffffff;
   border-radius: 12px;
-  padding: 16px 20px;
-  margin-top: 16px;
+  padding: 12px 14px;
+  margin-top: 12px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 
 .panel h2 {
   margin-top: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+}
+
+.text {
+  font-size: 0.9rem;
 }
 
 .instruction {
   font-weight: bold;
   color: #333;
-  margin-bottom: 8px;
+  margin: 8px 0;
+  font-size: 0.9rem;
 }
 
+/* ファイル選択ボタンをスマホ向けに大きく */
+#imageInput {
+  display: none; /* 実際の input は隠す */
+}
+
+.file-label {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #4caf50;
+  color: #fff;
+  font-size: 0.95rem;
+  text-align: center;
+  cursor: pointer;
+}
+
+.file-label:active {
+  opacity: 0.8;
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #777;
+}
+
+/* 手順リスト */
+.steps {
+  padding-left: 20px;
+  margin-top: 6px;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+/* キャンバス周り */
 .canvas-wrapper {
   border: 1px dashed #ccc;
   border-radius: 8px;
-  padding: 8px;
+  padding: 6px;
   background: #fafafa;
   overflow: auto;
+  max-height: 70vh;    /* 縦に長すぎる画像のため */
 }
 
+/* キャンバスは横幅を画面にフィットさせる */
 #footCanvas {
-  max-width: 100%;
+  width: 100%;
+  height: auto;
   display: block;
 }
 
+/* 診断結果 */
 #result {
-  line-height: 1.7;
+  line-height: 1.6;
+  font-size: 0.9rem;
 }
 
 .result-table {
@@ -56,13 +111,13 @@ h1 {
   margin-top: 8px;
   margin-bottom: 8px;
   width: 100%;
+  font-size: 0.85rem;
 }
 
 .result-table th,
 .result-table td {
   border: 1px solid #ccc;
   padding: 4px 6px;
-  font-size: 0.9rem;
   text-align: left;
 }
 
@@ -70,7 +125,7 @@ h1 {
   display: inline-block;
   padding: 2px 6px;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   margin-left: 4px;
 }
 
@@ -100,4 +155,15 @@ h1 {
 
 .note ul {
   padding-left: 20px;
+  font-size: 0.85rem;
+}
+
+/* 画面が大きい（タブレット・PC）のとき少し文字を大きく */
+@media (min-width: 768px) {
+  h1 {
+    font-size: 1.6rem;
+  }
+  .panel {
+    padding: 16px 20px;
+  }
 }

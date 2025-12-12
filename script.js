@@ -25,9 +25,10 @@ window.addEventListener("DOMContentLoaded", () => {
   const imageInput = document.getElementById("imageInput");
   imageInput.addEventListener("change", handleImageUpload);
 
+  // スマホのタップも click イベントとして飛んでくるのでこれでOK
   canvas.addEventListener("click", handleCanvasClick);
 
-  updateInstruction("まずは画像をアップロードしてください。");
+  updateInstruction("まずは写真を撮る / 選ぶ から始めてください。");
 });
 
 // ====== 画像アップロード処理 ======
@@ -42,7 +43,7 @@ function handleImageUpload(event) {
       points = []; // リセット
       resizeCanvasToImage();
       drawImage();
-      updateInstruction(`画像を読み込みました。キャンバス上で「${POINT_LABELS[0]}」をクリックしてください。`);
+      updateInstruction(`画像を読み込みました。「${POINT_LABELS[0]}」の位置をタップしてください。`);
       updateResultInitial();
     };
     img.src = e.target.result;
@@ -50,11 +51,13 @@ function handleImageUpload(event) {
   reader.readAsDataURL(file);
 }
 
-// キャンバスサイズを画像サイズに合わせる（幅が大きい場合は縮小）
+// キャンバスサイズを画像サイズに合わせる（横幅は画面にフィット）
 function resizeCanvasToImage() {
-  const maxWidth = 800; // キャンバスの最大幅（px）
-  const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+  const maxWidth = 800;          // PCで見たときの上限
+  const containerWidth = canvas.parentElement.clientWidth;
+  const baseWidth = Math.min(img.width, maxWidth, containerWidth);
 
+  const scale = baseWidth / img.width;
   canvas.width = img.width * scale;
   canvas.height = img.height * scale;
 }
@@ -62,7 +65,7 @@ function resizeCanvasToImage() {
 // 画像をキャンバスに描画
 function drawImage() {
   if (!imgLoaded) return;
-  // キャンバスサイズに合わせて縮小描画
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
@@ -75,8 +78,6 @@ function drawImage() {
 // ====== キャンバスクリック処理 ======
 function handleCanvasClick(event) {
   if (!imgLoaded) return;
-
-  // すべてのポイントを指定し終わっている場合は何もしない
   if (points.length >= POINT_LABELS.length) {
     return;
   }
@@ -88,13 +89,12 @@ function handleCanvasClick(event) {
   const label = POINT_LABELS[points.length];
   points.push({ x, y, label });
 
-  drawImage(); // 画像＋既存ポイントを再描画
+  drawImage(); // 画像＋既存ポイント再描画
   drawPoint(x, y, label, points.length);
 
   if (points.length < POINT_LABELS.length) {
-    // 次のポイントの案内
     const nextLabel = POINT_LABELS[points.length];
-    updateInstruction(`「${label}」を記録しました。次は「${nextLabel}」をクリックしてください。`);
+    updateInstruction(`「${label}」を記録しました。次は「${nextLabel}」の位置をタップしてください。`);
   } else {
     updateInstruction("すべてのポイントを指定しました。診断結果を計算しています…");
     analyzeFoot();
@@ -112,12 +112,10 @@ function drawPoint(x, y, label, index) {
   ctx.fill();
   ctx.closePath();
 
-  // 番号
+  // 番号とラベル
   ctx.font = "12px sans-serif";
   ctx.fillStyle = "#000000";
   ctx.fillText(index.toString(), x + 8, y - 4);
-
-  // ラベル
   ctx.fillText(label, x + 8, y + 10);
 }
 
@@ -125,7 +123,6 @@ function drawPoint(x, y, label, index) {
 function analyzeFoot() {
   if (points.length < POINT_LABELS.length) return;
 
-  // ポイントの取り出し
   const heel = points[0];
   const bigToe = points[1];
   const secondToe = points[2];
@@ -133,16 +130,13 @@ function analyzeFoot() {
   const widthLeft = points[4];
   const widthRight = points[5];
 
-  // 距離計算（ユークリッド距離）
   const dHeelBig = distance(heel, bigToe);
   const dHeelSecond = distance(heel, secondToe);
   const dHeelLittle = distance(heel, littleToe);
   const width = distance(widthLeft, widthRight);
 
-  // 比率（スケールが違っても比率なら比較可能）
   const widthRatio = width / dHeelBig;
 
-  // 幅の分類（ざっくりした目安）
   let widthType = "ふつう";
   let widthTagClass = "tag-normal";
   if (widthRatio < 0.36) {
@@ -153,9 +147,8 @@ function analyzeFoot() {
     widthTagClass = "tag-wide";
   }
 
-  // 指の形（エジプト／ギリシャ／スクエア）
-  const diff = dHeelBig - dHeelSecond; // 親指の方が長いと正
-  const toeThreshold = 5; // px単位のしきい値（撮影環境によって調整可）
+  const diff = dHeelBig - dHeelSecond;
+  const toeThreshold = 5;
   let toeType = "スクエア型（ほぼ同じ長さ）";
   let toeTagClass = "tag-square";
 
@@ -167,7 +160,6 @@ function analyzeFoot() {
     toeTagClass = "tag-greek";
   }
 
-  // 説明文（学生っぽく）
   let widthComment = "";
   if (widthType === "細め") {
     widthComment = "足幅が比較的細めなので、細身のスパイクや、甲が高くないモデルの方がフィットしやすいかもしれません。";
@@ -186,7 +178,6 @@ function analyzeFoot() {
     toeComment = "指の長さがそろっていて、つま先の形が四角っぽいタイプです。トウボックスが広めのモデルと相性が良いです。";
   }
 
-  // 結果をHTMLとして表示
   const resultDiv = document.getElementById("result");
   resultDiv.innerHTML = `
     <p><strong>診断まとめ（簡易）</strong></p>
@@ -237,16 +228,16 @@ function analyzeFoot() {
     </p>
     <p>${toeComment}</p>
 
-    <p style="font-size:0.85rem;color:#555;">
-      ※ この診断はあくまで写真とクリック位置に基づく簡易的な推定です。<br>
+    <p style="font-size:0.8rem;color:#555;">
+      ※ この診断はあくまで写真とタップ位置に基づく簡易的な推定です。<br>
       実際のサイズ選びでは、メーカーごとのワイズ表示や試し履きも合わせて確認してください。
     </p>
   `;
 
-  updateInstruction("診断が完了しました。別の写真で試したい場合は、画像をもう一度選んでください。");
+  updateInstruction("診断が完了しました。別の写真で試したい場合は、もう一度写真を撮る / 選ぶ を押してください。");
 }
 
-// 2点間の距離を計算
+// 2点間の距離
 function distance(p1, p2) {
   const dx = p1.x - p2.x;
   const dy = p1.y - p2.y;
@@ -262,7 +253,7 @@ function updateInstruction(text) {
 function updateResultInitial() {
   const resultDiv = document.getElementById("result");
   resultDiv.innerHTML = `
-    画像をキャンバスに読み込みました。<br>
-    指示に従って6か所のポイントをクリックすると診断結果が表示されます。
+    画像を読み込みました。<br>
+    指示に従って 6 か所のポイントをタップすると診断結果が表示されます。
   `;
 }
