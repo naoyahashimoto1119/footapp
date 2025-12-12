@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>足の特徴診断アプリ（ベータ）</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>足の特徴診断アプリ（ベータ）</h1>
+
+    <section class="panel">
+      <h2>1. 足の写真をアップロード</h2>
+      <p>
+        立った状態で足を上から撮った写真を選んでください。<br>
+        （できれば床が単色で、足全体が写っているもの）
+      </p>
+      <input type="file" id="imageInput" accept="image/*">
+    </section>
+
+    <section class="panel">
+      <h2>2. 写真の上をクリックしてポイントを指定</h2>
+      <ol>
+        <li>かかと</li>
+        <li>親指の先</li>
+        <li>人差し指の先</li>
+        <li>小指の先</li>
+        <li>足幅の左端（いちばん広いところ）</li>
+        <li>足幅の右端（いちばん広いところ）</li>
+      </ol>
+      <p id="instruction" class="instruction">
+        まずは画像をアップロードしてください。
+      </p>
+      <div class="canvas-wrapper">
+        <canvas id="footCanvas"></canvas>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>3. 診断結果</h2>
+      <div id="result">
+        まだ診断は行われていません。<br>
+        すべてのポイント（6か所）をクリックすると結果が表示されます。
+      </div>
+    </section>
+
+    <section class="panel note">
+      <h2>注意・今後の拡張イメージ</h2>
+      <ul>
+        <li>今は「写真＋手動クリック」で簡易的に特徴を推定しています。</li>
+        <li>幅／長さの比率と、指の長さの違いから「幅広／ふつう／細め」「エジプト型／ギリシャ型／スクエア型」を判定します。</li>
+        <li>将来的には輪郭抽出・深度推定・機械学習モデルを組み合わせて自動判定にすることもできます。</li>
+      </ul>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
