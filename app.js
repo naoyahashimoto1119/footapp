@@ -28,7 +28,8 @@ function resetUI() {
   analyzeBtn.disabled = true;
   retakeBtn.disabled = true;
   startCameraBtn.textContent = "カメラ開始";
-  resultText.textContent = "まだ解析していません。足を撮影して「解析」ボタンを押してください。（つま先が上になるように撮影）";
+  resultText.textContent =
+    "まだ解析していません。足を撮影して「解析」ボタンを押してください。（つま先が上になるように撮影）";
   centerInfo.textContent = "";
   showCameraView();
 }
@@ -36,7 +37,7 @@ function resetUI() {
 // カメラ停止
 function stopCamera() {
   if (stream) {
-    stream.getTracks().forEach(track => track.stop());
+    stream.getTracks().forEach((track) => track.stop());
     stream = null;
   }
   video.srcObject = null;
@@ -77,7 +78,10 @@ function computeFootMaskStats(imageData, width, height) {
   let sumY = 0;
   let count = 0;
 
-  let minX = width, maxX = 0, minY = height, maxY = 0;
+  let minX = width,
+    maxX = 0,
+    minY = height,
+    maxY = 0;
 
   const mask = new Uint8Array(totalPixels); // 1=足,0=背景
 
@@ -125,7 +129,7 @@ function computeFootMaskStats(imageData, width, height) {
     footWidth,
     footLength,
     meanBrightness,
-    threshold
+    threshold,
   };
 }
 
@@ -136,19 +140,24 @@ function classifyWidth(footWidth, footLength) {
   const ratio = footWidth / footLength;
 
   let label = "標準的な幅";
+  let category = "normal"; // narrow / normal / wide
   let detail = `幅/長さ比 = ${ratio.toFixed(3)}`;
 
   if (ratio > 0.47) {
     label = "かなり幅広め";
+    category = "wide";
   } else if (ratio > 0.42) {
     label = "やや幅広め";
+    category = "wide";
   } else if (ratio < 0.33) {
     label = "かなり細め";
+    category = "narrow";
   } else if (ratio < 0.37) {
     label = "やや細め";
+    category = "narrow";
   }
 
-  return { label, ratio, detail };
+  return { label, ratio, detail, category };
 }
 
 /**
@@ -156,20 +165,28 @@ function classifyWidth(footWidth, footLength) {
  */
 function classifyCenter(normX, normY) {
   let frontBackComment = "足の中央あたりに重心があります";
+  let fbCategory = "mid"; // rear / mid / front
+
   if (normY < 0.4) {
     frontBackComment = "かかと寄りに重心がありそうです（やや後重心気味）";
+    fbCategory = "rear";
   } else if (normY > 0.6) {
     frontBackComment = "つま先寄りに重心がありそうです（やや前重心気味）";
+    fbCategory = "front";
   }
 
   let innerOuterComment = "内外のバランスはほぼ中央です";
+  let ioCategory = "mid"; // inner / mid / outer
+
   if (normX < 0.4) {
     innerOuterComment = "やや内側（親指側）に重心が寄っていそうです";
+    ioCategory = "inner";
   } else if (normX > 0.6) {
     innerOuterComment = "やや外側（小指側）に重心が寄っていそうです";
+    ioCategory = "outer";
   }
 
-  return { frontBackComment, innerOuterComment };
+  return { frontBackComment, innerOuterComment, fbCategory, ioCategory };
 }
 
 /**
@@ -182,7 +199,11 @@ function estimateToeShape(mask, width, height, minX, maxX, minY, maxY) {
   const footLength = maxY - minY;
 
   if (footWidth <= 0 || footLength <= 0) {
-    return { type: "判定不能", detail: "足領域が小さすぎるため形状判定不可" };
+    return {
+      type: "判定不能",
+      detail: "足領域が小さすぎるため形状判定不可",
+      category: "unknown",
+    };
   }
 
   const slices = 3; // 左(親指側)・中央・右(小指側) に分割
@@ -202,7 +223,7 @@ function estimateToeShape(mask, width, height, minX, maxX, minY, maxY) {
             minToeY = y;
             found = true;
           }
-          break; // この列で一番上の足ピクセルは見つかったので次のxへ
+          break;
         }
       }
     }
@@ -215,28 +236,36 @@ function estimateToeShape(mask, width, height, minX, maxX, minY, maxY) {
     }
   }
 
-  // 一番先に出ているスライスを探す（値が一番小さい）
   const minAdvance = Math.min(...sliceAdvance);
   const minIndex = sliceAdvance.indexOf(minAdvance);
 
-  // 差が小さいとスクエア扱い
   const sorted = [...sliceAdvance].sort((a, b) => a - b);
   const diff = sorted[1] - sorted[0];
 
   let type = "判定不能";
+  let category = "unknown"; // egypt / greek / square / outer
+
   if (diff < 0.03) {
     type = "スクエア型（指の長さが近い）っぽい";
+    category = "square";
   } else if (minIndex === 0) {
     type = "エジプト型（親指が一番長い）っぽい";
+    category = "egypt";
   } else if (minIndex === 1) {
     type = "ギリシャ型（人差し指あたりが一番長い）っぽい";
+    category = "greek";
   } else if (minIndex === 2) {
     type = "外側寄りのつま先形状っぽい";
+    category = "outer";
   }
 
-  const detail = `スライスごとの先端度合い: 左=${sliceAdvance[0].toFixed(3)}, 中央=${sliceAdvance[1].toFixed(3)}, 右=${sliceAdvance[2].toFixed(3)}（小さいほど先端側）`;
+  const detail = `スライスごとの先端度合い: 左=${sliceAdvance[0].toFixed(
+    3
+  )}, 中央=${sliceAdvance[1].toFixed(3)}, 右=${sliceAdvance[2].toFixed(
+    3
+  )}（小さいほど先端側）`;
 
-  return { type, detail };
+  return { type, detail, category };
 }
 
 /**
@@ -254,7 +283,10 @@ function analyzeFootFromCanvas(debugDraw = true) {
   const stats = computeFootMaskStats(imageData, width, height);
 
   if (!stats) {
-    return { error: "足の領域をうまく検出できませんでした。背景を明るめ＆足をはっきり写して再度お試しください。" };
+    return {
+      error:
+        "足の領域をうまく検出できませんでした。背景を明るめ＆足をはっきり写して再度お試しください。",
+    };
   }
 
   const {
@@ -268,20 +300,15 @@ function analyzeFootFromCanvas(debugDraw = true) {
     footWidth,
     footLength,
     meanBrightness,
-    threshold
+    threshold,
   } = stats;
 
-  // デバッグ描画：バウンディングボックス & 重心
   if (debugDraw) {
-    // 元画像を一度描き直す
     ctx.putImageData(imageData, 0, 0);
-
-    // バウンディングボックス
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 2;
     ctx.strokeRect(minX, minY, footWidth, footLength);
 
-    // 重心
     ctx.beginPath();
     ctx.arc(cx, cy, 6, 0, Math.PI * 2);
     ctx.lineWidth = 2;
@@ -313,13 +340,113 @@ function analyzeFootFromCanvas(debugDraw = true) {
       normX,
       normY,
       meanBrightness,
-      threshold
-    }
+      threshold,
+    },
   };
 }
 
 /* =========================
-   ここまで解析ロジック
+   C：スパイクおすすめロジック
+   ========================= */
+
+/**
+ * 足の特徴からスパイクのおすすめを生成
+ * - brandExamples に具体例（目安）も入れている
+ */
+function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
+  const widthCat = widthInfo.category; // narrow / normal / wide
+  const fbCat = centerInfoText.fbCategory; // front / mid / rear
+  const ioCat = centerInfoText.ioCategory; // inner / mid / outer
+  const toeCat = toeInfo.category; // egypt / greek / square / outer / unknown
+
+  const fitPoints = [];
+  const playStylePoints = [];
+  const brandExamples = [];
+
+  // 幅ベースのフィット
+  if (widthCat === "wide") {
+    fitPoints.push(
+      "足幅が広めなので、ワイドラスト（日本人向け・幅広め）を選ぶとフィットしやすいです。"
+    );
+    brandExamples.push(
+      "幅広向けの例：ミズノ（モレリア系）、アシックス、ナイキのJAPANラストモデル など"
+    );
+  } else if (widthCat === "narrow") {
+    fitPoints.push(
+      "足幅が細めなので、欧州ブランドのタイトめなラストとも相性が良い可能性があります。"
+    );
+    brandExamples.push(
+      "細め向けの例：ナイキのスピード系、アディダス X 系、プーマ ウルトラ系 など"
+    );
+  } else {
+    fitPoints.push(
+      "幅は標準的なので、多くのスパイクからフィット感で選びやすいタイプです。"
+    );
+    brandExamples.push(
+      "標準向けの例：ナイキ ティエンポ系、アディダス コパ系、ニューバランス テケラなど"
+    );
+  }
+
+  // 重心ベースのプレースタイル
+  if (fbCat === "front") {
+    playStylePoints.push(
+      "前重心傾向なので、加速・ターンを多用するスピード系スパイクとの相性が良さそうです。"
+    );
+  } else if (fbCat === "rear") {
+    playStylePoints.push(
+      "やや後重心傾向なので、安定性やクッション性を重視したモデルも候補に入れたいタイプです。"
+    );
+  } else {
+    playStylePoints.push(
+      "重心は中央寄りでバランスタイプなので、ポジションやプレースタイルに合わせて自由に選べます。"
+    );
+  }
+
+  if (ioCat === "inner") {
+    playStylePoints.push(
+      "内側寄りに体重が乗りやすいので、インサイドパスやボールコントロールを多用する選手向けのグリップ・アッパーもチェックすると良いです。"
+    );
+  } else if (ioCat === "outer") {
+    playStylePoints.push(
+      "外側寄りに体重が乗りやすいので、カットインやアウトサイドの切り返し時に足首周りの安定性も意識して選ぶと安心です。"
+    );
+  }
+
+  // つま先形状ベースのフィット
+  if (toeCat === "egypt") {
+    fitPoints.push(
+      "エジプト型（親指が一番長い）傾向なので、つま先部分に余裕がありつつも指が当たりにくい形状を選ぶのがおすすめです。"
+    );
+  } else if (toeCat === "greek") {
+    fitPoints.push(
+      "ギリシャ型（人差し指付近が長い）傾向なので、つま先がやや尖った形や欧州ブランドのラストとも相性が良い場合があります。"
+    );
+  } else if (toeCat === "square") {
+    fitPoints.push(
+      "スクエア型（指の長さが近い）傾向なので、つま先が丸く広がった形状のスパイクだと指が当たりにくくなります。"
+    );
+  }
+
+  const summaryLines = [];
+
+  summaryLines.push(
+    `・幅タイプ：${widthInfo.label}（幅/長さ比: ${widthInfo.ratio.toFixed(3)}）`
+  );
+  summaryLines.push(`・つま先タイプ：${toeInfo.type}`);
+  summaryLines.push(
+    `・重心傾向：縦＝${centerInfoText.fbCategory} / 横＝${centerInfoText.ioCategory}`
+  );
+
+  return {
+    summaryLines,
+    fitPoints,
+    playStylePoints,
+    brandExamples,
+  };
+}
+
+/* =========================
+   ここまで解析＋推薦ロジック
    ========================= */
 
 // カメラ開始
@@ -328,7 +455,7 @@ startCameraBtn.addEventListener("click", async () => {
     stopCamera(); // 念のため一旦止める
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "environment" },
-      audio: false
+      audio: false,
     });
 
     video.srcObject = stream;
@@ -339,18 +466,21 @@ startCameraBtn.addEventListener("click", async () => {
     analyzeBtn.disabled = true;
     retakeBtn.disabled = true;
 
-    resultText.textContent = "カメラが起動しました。足を真上から映して、撮影ボタンを押してください。（つま先が上になる向きで）";
+    resultText.textContent =
+      "カメラが起動しました。足を真上から映して、撮影ボタンを押してください。（つま先が上になる向きで）";
     centerInfo.textContent = "";
   } catch (err) {
     console.error(err);
-    resultText.textContent = "カメラを起動できませんでした。HTTPS または localhost で開いているか確認してください。";
+    resultText.textContent =
+      "カメラを起動できませんでした。HTTPS または localhost で開いているか確認してください。";
   }
 });
 
 // 撮影
 captureBtn.addEventListener("click", () => {
   if (!video.videoWidth || !video.videoHeight) {
-    resultText.textContent = "まだカメラ映像が安定していません。少し待ってから再度撮影してください。";
+    resultText.textContent =
+      "まだカメラ映像が安定していません。少し待ってから再度撮影してください。";
     return;
   }
 
@@ -361,7 +491,6 @@ captureBtn.addEventListener("click", () => {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // 撮影後はカメラを隠して写真のみ表示
   stopCamera();
   showCapturedView();
 
@@ -371,7 +500,8 @@ captureBtn.addEventListener("click", () => {
   analyzeBtn.disabled = false;
   retakeBtn.disabled = false;
 
-  resultText.textContent = "画像をキャプチャしました。「解析」ボタンを押してください。";
+  resultText.textContent =
+    "画像をキャプチャしました。「解析」ボタンを押すと足の特徴とスパイクのおすすめを表示します。";
 });
 
 // 解析ボタン
@@ -386,28 +516,53 @@ analyzeBtn.addEventListener("click", () => {
 
   const { widthInfo, centerInfoText, toeInfo, debug } = res;
 
+  // スパイクおすすめ
+  const rec = recommendSpikes(widthInfo, centerInfoText, toeInfo, debug);
+
   resultText.innerHTML = `
     <p>※ 現在はAIモデルではなく、画像処理だけで推定する試作版です。</p>
+    <h3>足の特徴まとめ</h3>
     <ul>
       <li>足の形（縦横比）：${widthInfo.label}</li>
       <li>つま先の形：${toeInfo.type}</li>
       <li>縦方向の重心：${centerInfoText.frontBackComment}</li>
       <li>横方向の重心：${centerInfoText.innerOuterComment}</li>
     </ul>
+
+    <h3>スパイクの選び方のヒント</h3>
+    <ul>
+      ${rec.fitPoints.map((t) => `<li>${t}</li>`).join("")}
+      ${rec.playStylePoints.map((t) => `<li>${t}</li>`).join("")}
+    </ul>
+
+    <h3>ブランド・モデルの例（あくまで目安）</h3>
+    <ul>
+      ${rec.brandExamples.map((t) => `<li>${t}</li>`).join("")}
+    </ul>
+
     <p style="font-size:0.8rem; color:#777;">
-      ※ つま先が上方向になるように撮影すると精度が上がります。
+      ※ 実際のフィット感はサイズ・履き心地・ポジション・プレー強度などでも変わるので、<br>
+      店頭での試し履きや、メーカーのワイド/ナロー表記も一緒に確認してください。
     </p>
   `;
 
   centerInfo.innerHTML = `
     <strong>内部計算値（デバッグ用）</strong><br>
     画像サイズ: ${debug.width} × ${debug.height}<br>
-    足の幅: ${debug.footWidth.toFixed(1)} px / 足の長さ: ${debug.footLength.toFixed(1)} px<br>
+    足の幅: ${debug.footWidth.toFixed(1)} px / 足の長さ: ${debug.footLength.toFixed(
+      1
+    )} px<br>
     幅/長さ比: ${widthInfo.ratio.toFixed(3)}<br>
     重心座標: (${debug.cx.toFixed(1)}, ${debug.cy.toFixed(1)})<br>
-    足内での重心位置(横): ${(debug.normX * 100).toFixed(1)}%（左→右）<br>
-    足内での重心位置(縦): ${(debug.normY * 100).toFixed(1)}%（上→下）<br>
-    平均明度: ${debug.meanBrightness.toFixed(1)} / 閾値: ${debug.threshold.toFixed(1)}<br>
+    足内での重心位置(横): ${(debug.normX * 100).toFixed(
+      1
+    )}%（左→右）<br>
+    足内での重心位置(縦): ${(debug.normY * 100).toFixed(
+      1
+    )}%（上→下）<br>
+    平均明度: ${debug.meanBrightness.toFixed(1)} / 閾値: ${debug.threshold.toFixed(
+      1
+    )}<br>
     【つま先形状デバッグ】${toeInfo.detail}
   `;
 });
@@ -415,6 +570,7 @@ analyzeBtn.addEventListener("click", () => {
 // もう一度撮る
 retakeBtn.addEventListener("click", () => {
   centerInfo.textContent = "";
-  resultText.textContent = "カメラを再起動します。足を真上から映して、撮影ボタンを押してください。（つま先が上になる向きで）";
-  startCameraBtn.click(); // カメラ開始ボタンを擬似的に押す
+  resultText.textContent =
+    "カメラを再起動します。足を真上から映して、撮影ボタンを押してください。（つま先が上になる向きで）";
+  startCameraBtn.click();
 });
