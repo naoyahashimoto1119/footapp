@@ -10,6 +10,10 @@ const centerInfo = document.getElementById("centerInfo");
 const ctx = canvas.getContext("2d");
 let stream = null;
 
+// ★ AI 用セグメンタ（人物マスクを出してくれるやつ）
+let segmenter = null;
+let segmenterLoading = null;
+
 // 表示モード切り替え
 function showCameraView() {
   video.classList.remove("hidden");
@@ -47,33 +51,39 @@ function stopCamera() {
 resetUI();
 
 /* =========================
-   足解析ロジック（Bパート）
+   AI セグメンタの準備
+   ========================= */
+
+async function getSegmenter() {
+  if (segmenter) return segmenter;
+
+  if (!segmenterLoading) {
+    const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+    const segmenterConfig = {
+      runtime: "mediapipe",
+      solutionPath:
+        "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation",
+      modelType: "general",
+    };
+    segmenterLoading = bodySegmentation.createSegmenter(model, segmenterConfig);
+  }
+
+  segmenter = await segmenterLoading;
+  return segmenter;
+}
+
+/* =========================
+   足解析ロジック（AIマスク版）
    ========================= */
 
 /**
- * 画像データから足マスク＆重心などの統計量を計算
- * - 明るさの平均から自動で閾値を決めて足っぽい領域を抽出
+ * AI が出してくれたマスク画像から足の統計量を計算
+ * - maskImageData: segmenter.segmentPeople(canvas)[0].mask.toImageData() の結果
  */
-function computeFootMaskStats(imageData, width, height) {
-  const data = imageData.data;
+function computeFootStatsFromMask(maskImageData, width, height) {
+  const data = maskImageData.data; // RGBA の1次元配列
   const totalPixels = width * height;
 
-  // 1回目ループ：平均明度を求める
-  let sumBrightness = 0;
-  for (let i = 0; i < totalPixels; i++) {
-    const idx = i * 4;
-    const r = data[idx];
-    const g = data[idx + 1];
-    const b = data[idx + 2];
-    const brightness = (r + g + b) / 3;
-    sumBrightness += brightness;
-  }
-  const meanBrightness = sumBrightness / totalPixels;
-
-  // 背景が明るく、足が少し暗い前提で閾値を設定（平均の 0.9 倍）
-  const threshold = meanBrightness * 0.9;
-
-  // 2回目ループ：足マスク＆重心・バウンディングボックスを計算
   let sumX = 0;
   let sumY = 0;
   let count = 0;
@@ -83,18 +93,13 @@ function computeFootMaskStats(imageData, width, height) {
     minY = height,
     maxY = 0;
 
-  const mask = new Uint8Array(totalPixels); // 1=足,0=背景
-
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      const brightness = (r + g + b) / 3;
+      const a = data[idx + 3]; // Alpha に「人領域」の濃さが入っている
 
-      if (brightness < threshold) {
-        mask[y * width + x] = 1;
+      // a が大きい＝人（足）として認識
+      if (a > 128) {
         sumX += x;
         sumY += y;
         count++;
@@ -108,18 +113,15 @@ function computeFootMaskStats(imageData, width, height) {
   }
 
   if (count === 0) {
-    return null; // 足検出失敗
+    return null;
   }
 
   const cx = sumX / count;
   const cy = sumY / count;
-
   const footWidth = maxX - minX;
   const footLength = maxY - minY;
 
   return {
-    mask,
-    count,
     cx,
     cy,
     minX,
@@ -128,8 +130,7 @@ function computeFootMaskStats(imageData, width, height) {
     maxY,
     footWidth,
     footLength,
-    meanBrightness,
-    threshold,
+    count,
   };
 }
 
@@ -194,7 +195,8 @@ function classifyCenter(normX, normY) {
  * - 前提：つま先が画像の「上側」に来るように撮影している
  * - 足の領域を左右3分割して、一番先に出ている部分を調べる
  */
-function estimateToeShape(mask, width, height, minX, maxX, minY, maxY) {
+function estimateToeShape(maskImageData, width, height, minX, maxX, minY, maxY) {
+  const data = maskImageData.data;
   const footWidth = maxX - minX;
   const footLength = maxY - minY;
 
@@ -218,7 +220,9 @@ function estimateToeShape(mask, width, height, minX, maxX, minY, maxY) {
 
     for (let x = startX; x < endX; x++) {
       for (let y = minY; y <= maxY; y++) {
-        if (mask[y * width + x] === 1) {
+        const idx = (y * width + x) * 4;
+        const a = data[idx + 3];
+        if (a > 128) {
           if (y < minToeY) {
             minToeY = y;
             found = true;
@@ -232,7 +236,7 @@ function estimateToeShape(mask, width, height, minX, maxX, minY, maxY) {
       const advance = (minToeY - minY) / footLength; // 0〜1、小さいほど先端側
       sliceAdvance.push(advance);
     } else {
-      sliceAdvance.push(1.0); // 足がない領域扱い
+      sliceAdvance.push(1.0);
     }
   }
 
@@ -269,9 +273,9 @@ function estimateToeShape(mask, width, height, minX, maxX, minY, maxY) {
 }
 
 /**
- * canvas 上の画像から足の特徴をまとめて解析
+ * canvas 上の画像から足の特徴をまとめて解析（AI使用）
  */
-function analyzeFootFromCanvas(debugDraw = true) {
+async function analyzeFootFromCanvas(debugDraw = true) {
   const width = canvas.width;
   const height = canvas.height;
 
@@ -279,36 +283,42 @@ function analyzeFootFromCanvas(debugDraw = true) {
     return { error: "まず撮影をしてください。" };
   }
 
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const stats = computeFootMaskStats(imageData, width, height);
+  // 元画像を保持しておく（あとで上からバウンディングボックス描画）
+  const originalImage = ctx.getImageData(0, 0, width, height);
 
-  if (!stats) {
+  const seg = await getSegmenter();
+  const people = await seg.segmentPeople(canvas); // canvas をそのまま渡せる
+
+  if (!people || people.length === 0) {
     return {
       error:
-        "足の領域をうまく検出できませんでした。背景を明るめ＆足をはっきり写して再度お試しください。",
+        "AIで足の領域をうまく検出できませんでした。画面いっぱいに足を写して再度お試しください。",
     };
   }
 
-  const {
-    mask,
-    cx,
-    cy,
-    minX,
-    maxX,
-    minY,
-    maxY,
-    footWidth,
-    footLength,
-    meanBrightness,
-    threshold,
-  } = stats;
+  // 0番目の人物マスクを ImageData で取得
+  const maskImageData = await people[0].mask.toImageData();
+
+  const stats = computeFootStatsFromMask(maskImageData, width, height);
+  if (!stats) {
+    return {
+      error:
+        "足の領域が小さすぎて解析できませんでした。もう少し足を大きく写してください。",
+    };
+  }
+
+  const { cx, cy, minX, maxX, minY, maxY, footWidth, footLength, count } =
+    stats;
 
   if (debugDraw) {
-    ctx.putImageData(imageData, 0, 0);
+    ctx.putImageData(originalImage, 0, 0);
+
+    // バウンディングボックス
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 2;
     ctx.strokeRect(minX, minY, footWidth, footLength);
 
+    // 重心
     ctx.beginPath();
     ctx.arc(cx, cy, 6, 0, Math.PI * 2);
     ctx.lineWidth = 2;
@@ -320,10 +330,17 @@ function analyzeFootFromCanvas(debugDraw = true) {
 
   const normX = (cx - minX) / (footWidth || 1);
   const normY = (cy - minY) / (footLength || 1);
-
   const centerInfoText = classifyCenter(normX, normY);
 
-  const toeInfo = estimateToeShape(mask, width, height, minX, maxX, minY, maxY);
+  const toeInfo = estimateToeShape(
+    maskImageData,
+    width,
+    height,
+    minX,
+    maxX,
+    minY,
+    maxY
+  );
 
   return {
     error: null,
@@ -339,20 +356,15 @@ function analyzeFootFromCanvas(debugDraw = true) {
       cy,
       normX,
       normY,
-      meanBrightness,
-      threshold,
+      pixelCount: count,
     },
   };
 }
 
 /* =========================
-   C：スパイクおすすめロジック
+   C：スパイクおすすめロジック（前と同じ）
    ========================= */
 
-/**
- * 足の特徴からスパイクのおすすめを生成
- * - brandExamples に具体例（目安）も入れている
- */
 function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
   const widthCat = widthInfo.category; // narrow / normal / wide
   const fbCat = centerInfoText.fbCategory; // front / mid / rear
@@ -363,7 +375,6 @@ function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
   const playStylePoints = [];
   const brandExamples = [];
 
-  // 幅ベースのフィット
   if (widthCat === "wide") {
     fitPoints.push(
       "足幅が広めなので、ワイドラスト（日本人向け・幅広め）を選ぶとフィットしやすいです。"
@@ -387,7 +398,6 @@ function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
     );
   }
 
-  // 重心ベースのプレースタイル
   if (fbCat === "front") {
     playStylePoints.push(
       "前重心傾向なので、加速・ターンを多用するスピード系スパイクとの相性が良さそうです。"
@@ -404,7 +414,7 @@ function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
 
   if (ioCat === "inner") {
     playStylePoints.push(
-      "内側寄りに体重が乗りやすいので、インサイドパスやボールコントロールを多用する選手向けのグリップ・アッパーもチェックすると良いです。"
+      "内側寄りに体重が乗りやすいので、インサイドパスやボールコンロトールを多用する選手向けのグリップ・アッパーもチェックすると良いです。"
     );
   } else if (ioCat === "outer") {
     playStylePoints.push(
@@ -412,7 +422,6 @@ function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
     );
   }
 
-  // つま先形状ベースのフィット
   if (toeCat === "egypt") {
     fitPoints.push(
       "エジプト型（親指が一番長い）傾向なので、つま先部分に余裕がありつつも指が当たりにくい形状を選ぶのがおすすめです。"
@@ -428,7 +437,6 @@ function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
   }
 
   const summaryLines = [];
-
   summaryLines.push(
     `・幅タイプ：${widthInfo.label}（幅/長さ比: ${widthInfo.ratio.toFixed(3)}）`
   );
@@ -452,14 +460,14 @@ function recommendSpikes(widthInfo, centerInfoText, toeInfo, debug) {
 // カメラ開始
 startCameraBtn.addEventListener("click", async () => {
   try {
-    stopCamera(); // 念のため一旦止める
+    stopCamera();
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "environment" },
       audio: false,
     });
 
     video.srcObject = stream;
-    showCameraView(); // カメラモード
+    showCameraView();
 
     startCameraBtn.disabled = true;
     captureBtn.disabled = false;
@@ -501,12 +509,14 @@ captureBtn.addEventListener("click", () => {
   retakeBtn.disabled = false;
 
   resultText.textContent =
-    "画像をキャプチャしました。「解析」ボタンを押すと足の特徴とスパイクのおすすめを表示します。";
+    "画像をキャプチャしました。「解析」ボタンを押すとAIで足の特徴とスパイクのおすすめを表示します。";
 });
 
-// 解析ボタン
-analyzeBtn.addEventListener("click", () => {
-  const res = analyzeFootFromCanvas(true);
+// 解析ボタン（★ AI なので async に）
+analyzeBtn.addEventListener("click", async () => {
+  resultText.textContent = "AIで足の領域を解析中…（初回は少し時間がかかることがあります）";
+
+  const res = await analyzeFootFromCanvas(true);
 
   if (res.error) {
     resultText.textContent = res.error;
@@ -515,12 +525,11 @@ analyzeBtn.addEventListener("click", () => {
   }
 
   const { widthInfo, centerInfoText, toeInfo, debug } = res;
-
-  // スパイクおすすめ
   const rec = recommendSpikes(widthInfo, centerInfoText, toeInfo, debug);
 
   resultText.innerHTML = `
-    <p>※ 現在はAIモデルではなく、画像処理だけで推定する試作版です。</p>
+    <p>※ TensorFlow.js + MediaPipe のAIで足の領域を推定しています。</p>
+
     <h3>足の特徴まとめ</h3>
     <ul>
       <li>足の形（縦横比）：${widthInfo.label}</li>
@@ -541,7 +550,7 @@ analyzeBtn.addEventListener("click", () => {
     </ul>
 
     <p style="font-size:0.8rem; color:#777;">
-      ※ 実際のフィット感はサイズ・履き心地・ポジション・プレー強度などでも変わるので、<br>
+      ※ 実際のフィット感はサイズ・履き心地・ポジション・プレー強度などでも変わります。<br>
       店頭での試し履きや、メーカーのワイド/ナロー表記も一緒に確認してください。
     </p>
   `;
@@ -560,9 +569,7 @@ analyzeBtn.addEventListener("click", () => {
     足内での重心位置(縦): ${(debug.normY * 100).toFixed(
       1
     )}%（上→下）<br>
-    平均明度: ${debug.meanBrightness.toFixed(1)} / 閾値: ${debug.threshold.toFixed(
-      1
-    )}<br>
+    ピクセル数（足領域）: ${debug.pixelCount}<br>
     【つま先形状デバッグ】${toeInfo.detail}
   `;
 });
