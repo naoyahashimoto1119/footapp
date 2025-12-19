@@ -1,30 +1,66 @@
-// DOM取得
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const startCameraBtn = document.getElementById("startCameraBtn");
 const captureBtn = document.getElementById("captureBtn");
 const analyzeBtn = document.getElementById("analyzeBtn");
+const retakeBtn = document.getElementById("retakeBtn");
 const resultText = document.getElementById("resultText");
 const centerInfo = document.getElementById("centerInfo");
 
 const ctx = canvas.getContext("2d");
 let stream = null;
 
+// 表示モード切り替え
+function showCameraView() {
+  video.classList.remove("hidden");
+  canvas.classList.add("hidden");
+}
+
+function showCapturedView() {
+  video.classList.add("hidden");
+  canvas.classList.remove("hidden");
+}
+
+// ボタン状態の初期化
+function resetUI() {
+  startCameraBtn.disabled = false;
+  captureBtn.disabled = true;
+  analyzeBtn.disabled = true;
+  retakeBtn.disabled = true;
+  startCameraBtn.textContent = "カメラ開始";
+  resultText.textContent = "まだ解析していません。足を撮影して「解析」ボタンを押してください。";
+  centerInfo.textContent = "";
+  showCameraView();
+}
+
+// カメラ停止
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+}
+
+// 初期状態
+resetUI();
+
 // カメラ開始
 startCameraBtn.addEventListener("click", async () => {
   try {
-    // 背面カメラを優先（スマホ想定）
+    stopCamera(); // 念のため一旦止める
     stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "environment"
-      },
+      video: { facingMode: "environment" },
       audio: false
     });
 
     video.srcObject = stream;
+    showCameraView(); // カメラモード
 
+    startCameraBtn.disabled = true;
     captureBtn.disabled = false;
     analyzeBtn.disabled = true;
+    retakeBtn.disabled = true;
 
     resultText.textContent = "カメラが起動しました。足を真上から映して、撮影ボタンを押してください。";
     centerInfo.textContent = "";
@@ -41,7 +77,6 @@ captureBtn.addEventListener("click", () => {
     return;
   }
 
-  // canvas サイズを動画のサイズに合わせる（簡易的に縮小）
   const maxWidth = 480;
   const scale = Math.min(maxWidth / video.videoWidth, 1);
   canvas.width = video.videoWidth * scale;
@@ -49,11 +84,20 @@ captureBtn.addEventListener("click", () => {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  resultText.textContent = "画像をキャプチャしました。「解析（試作）」ボタンを押してください。";
+  // 撮影後はカメラを隠して写真のみ表示
+  stopCamera();
+  showCapturedView();
+
+  startCameraBtn.disabled = false;
+  startCameraBtn.textContent = "カメラ再開";
+  captureBtn.disabled = true;
   analyzeBtn.disabled = false;
+  retakeBtn.disabled = false;
+
+  resultText.textContent = "画像をキャプチャしました。「解析」ボタンを押してください。";
 });
 
-// 解析（試作）：明るい背景上で足らしき部分の重心を計算してみる
+// 解析（試作版：明るさベースでざっくり重心推定）
 analyzeBtn.addEventListener("click", () => {
   const width = canvas.width;
   const height = canvas.height;
@@ -66,16 +110,13 @@ analyzeBtn.addEventListener("click", () => {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
-  // 足（暗めの部分）だけの重心を取るための変数
   let sumX = 0;
   let sumY = 0;
   let count = 0;
 
-  // 足全体のバウンディングボックス（ざっくり）
   let minX = width, maxX = 0, minY = height, maxY = 0;
 
-  // 明るさが一定以下のピクセルを「足側」と仮定（超ざっくり）
-  // → 背景が明るめ＆足・靴が少し暗い前提
+  // 明るさが一定以下のピクセルを「足」とみなす（試作）
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
@@ -83,10 +124,8 @@ analyzeBtn.addEventListener("click", () => {
       const g = data[idx + 1];
       const b = data[idx + 2];
 
-      // 簡易明度
       const brightness = (r + g + b) / 3;
 
-      // brightness が 230 未満を「足」としてみる
       if (brightness < 230) {
         sumX += x;
         sumY += y;
@@ -109,25 +148,20 @@ analyzeBtn.addEventListener("click", () => {
   const cx = sumX / count;
   const cy = sumY / count;
 
-  // 重心を目印として描画（赤丸）
+  // 重心マーク
   ctx.beginPath();
   ctx.arc(cx, cy, 6, 0, Math.PI * 2);
   ctx.lineWidth = 2;
   ctx.strokeStyle = "red";
   ctx.stroke();
 
-  // バウンディングボックスの幅・長さ
   const footWidth = maxX - minX;
   const footLength = maxY - minY;
 
-  // 比率
   const widthToLength = footWidth / footLength;
+  const normX = (cx - minX) / (footWidth || 1);
+  const normY = (cy - minY) / (footLength || 1);
 
-  // 0〜1 に正規化した重心位置（足の中でどのあたりか）
-  const normX = (cx - minX) / (footWidth || 1);   // 左→右
-  const normY = (cy - minY) / (footLength || 1);  // 上→下（かかと→つま先、とは限らないが一旦仮）
-
-  // 簡易コメント生成（試作ロジック）
   let widthComment = "標準的な幅";
   if (widthToLength > 0.45) {
     widthComment = "やや幅広ぎみ";
@@ -167,4 +201,13 @@ analyzeBtn.addEventListener("click", () => {
     足内での重心位置(横): ${(normX * 100).toFixed(1)}%（左→右）<br>
     足内での重心位置(縦): ${(normY * 100).toFixed(1)}%（上→下）
   `;
+});
+
+// もう一度撮る
+retakeBtn.addEventListener("click", () => {
+  // 結果をリセットして、再度カメラモードへ
+  centerInfo.textContent = "";
+  resultText.textContent = "カメラを再起動します。足を真上から映して、撮影ボタンを押してください。";
+
+  startCameraBtn.click(); // カメラ開始ボタンを擬似的に押す
 });

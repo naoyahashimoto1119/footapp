@@ -14,14 +14,19 @@
 
   <main>
     <section class="camera-section">
-      <h2>カメラ</h2>
-      <video id="video" autoplay playsinline></video>
-      <canvas id="canvas"></canvas>
+      <h2>撮影</h2>
+
+      <div class="camera-view">
+        <!-- 撮影中は video を表示、撮影後は canvas を表示 -->
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
+      </div>
 
       <div class="buttons">
         <button id="startCameraBtn">カメラ開始</button>
         <button id="captureBtn" disabled>撮影</button>
-        <button id="analyzeBtn" disabled>解析（試作）</button>
+        <button id="analyzeBtn" disabled>解析</button>
+        <button id="retakeBtn" disabled>もう一度撮る</button>
       </div>
     </section>
 
@@ -31,15 +36,13 @@
         まだ解析していません。足を撮影して「解析」ボタンを押してください。
       </div>
 
-      <div id="centerInfo" class="center-info">
-        <!-- 重心位置の数値表示 -->
-      </div>
+      <div id="centerInfo" class="center-info"></div>
     </section>
   </main>
 
   <footer>
     <p class="note">
-      ※ 現時点ではAIモデルなしの「試作版」です。<br>
+      ※ 現時点ではAIモデルではなく、画像の明るさからざっくり推定する試作版です。<br>
       背景が明るめ＆足がはっきり写るように撮影すると解析しやすいです。
     </p>
   </footer>
@@ -47,3 +50,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+

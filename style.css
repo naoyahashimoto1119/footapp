@@ -51,31 +51,30 @@ section h2 {
   margin-bottom: 8px;
 }
 
-/* ============================
-   カメラと撮影画像を横並びにする
-   （スマホでも必ず横並び）
-============================ */
-.camera-area {
-  display: flex;
-  flex-direction: row;
-  gap: 16px;
-  overflow-x: auto;         /* 幅が足りないとき横スクロール可 */
-  padding-bottom: 8px;
-  flex-wrap: nowrap !important;  /* 絶対折り返さない */
+/* 撮影エリア */
+.camera-view {
+  width: 100%;
 }
 
-/* video と canvas のスタイル */
+/* カメラ or 撮った画像（どちらか1つだけ表示する） */
 #video,
 #canvas {
-  width: 50vw;           /* スマホでも横並びにするために画面の半分 */
-  max-width: 360px;      /* PC では広がりすぎ防止 */
+  width: 100%;
+  max-width: 500px;
   height: auto;
   border-radius: 12px;
   border: 1px solid #ddd;
   background: #000;
+  display: block;
+  margin: 0 auto;
 }
 
-/* ボタンまわり */
+/* 非表示用クラス */
+.hidden {
+  display: none !important;
+}
+
+/* ボタン */
 .buttons {
   display: flex;
   flex-wrap: wrap;
@@ -118,10 +117,21 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-/* フッターの注意書き */
+/* フッター */
 .note {
   text-align: center;
   font-size: 0.8rem;
   color: #777;
   padding: 8px 12px 16px;
+}
+
+/* スマホ向け */
+@media (max-width: 600px) {
+  main {
+    padding: 0 8px 16px;
+  }
+  button {
+    font-size: 0.85rem;
+    padding: 8px 10px;
+  }
 }
