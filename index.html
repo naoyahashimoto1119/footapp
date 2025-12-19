@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>足特徴＆重心チェッカー（試作）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>足特徴＆重心チェッカー（試作版）</h1>
+    <p>足を真上から撮影して、「撮影 → 解析」を押してね。</p>
+  </header>
+
+  <main>
+    <section class="camera-section">
+      <h2>カメラ</h2>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
+
+      <div class="buttons">
+        <button id="startCameraBtn">カメラ開始</button>
+        <button id="captureBtn" disabled>撮影</button>
+        <button id="analyzeBtn" disabled>解析（試作）</button>
+      </div>
+    </section>
+
+    <section class="result-section">
+      <h2>解析結果</h2>
+      <div id="resultText">
+        まだ解析していません。足を撮影して「解析」ボタンを押してください。
+      </div>
+
+      <div id="centerInfo" class="center-info">
+        <!-- 重心位置の数値表示 -->
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p class="note">
+      ※ 現時点ではAIモデルなしの「試作版」です。<br>
+      背景が明るめ＆足がはっきり写るように撮影すると解析しやすいです。
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

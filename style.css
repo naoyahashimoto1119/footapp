@@ -1,0 +1,129 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f5f5f5;
+  color: #333;
+}
+
+header {
+  padding: 16px;
+  text-align: center;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+h1 {
+  font-size: 1.3rem;
+  margin: 0 0 4px;
+}
+
+header p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+main {
+  max-width: 900px;
+  margin: 16px auto;
+  padding: 0 12px 24px;
+}
+
+section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+section h2 {
+  font-size: 1.1rem;
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.camera-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#video, #canvas {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  background: #000;
+}
+
+#canvas {
+  margin-top: 8px;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+button {
+  flex: 1;
+  min-width: 90px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: #007aff;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+button:disabled {
+  background: #ccc;
+  color: #777;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.result-section #resultText {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.center-info {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f0f7ff;
+  font-size: 0.85rem;
+}
+
+.note {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #777;
+  padding: 8px 12px 16px;
+}
+
+/* スマホ向け */
+@media (max-width: 600px) {
+  main {
+    padding: 0 8px 16px;
+  }
+  button {
+    font-size: 0.85rem;
+    padding: 8px 10px;
+  }
+}
